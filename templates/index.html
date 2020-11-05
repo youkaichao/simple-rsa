@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple RSA Demo</title>
+    <style>
+        input:invalid {
+          border: red solid 3px;
+        }
+    </style>
+</head>
+<body>
+<script>
+    var has_key = false;
+    // these are all represented by strings
+    var p = null;
+    var q = null;
+    var n = null;
+    var e = null;
+    var d = null;
+
+    var url = '/'
+
+    async function postData(url = '', data = {}) {
+      const response = await fetch(url, {
+        method: 'POST',
+        mode: 'cors', // no-cors, *cors, same-origin
+        cache: 'no-cache',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        redirect: 'follow', // manual, *follow, error
+        body: JSON.stringify(data) // body data type must match "Content-Type" header
+      });
+      return response.json(); // parses JSON response into native JavaScript objects
+    }
+
+    function check_validity(args){
+        for (let i = 0; i < args.length; i++) {
+            let el = document.getElementById(args[i]);
+            if(el.validity.patternMismatch)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function generate_key()
+    {
+        let node = document.getElementById("length");
+        let bit_size = node.value; // a string, 512 or 1024
+        postData(url + 'generate', { key_size: bit_size })
+          .then(data => {
+              has_key = true;
+              p = data.p;
+              q = data.q;
+              n = data.n;
+              e = data.e;
+              d = data.d;
+              document.getElementById("time").innerText = `${data.time} seconds for generating key!`
+              document.getElementById("p").value = p;
+              document.getElementById("q").value = q;
+              document.getElementById("n").value = n;
+              document.getElementById("e").value = e;
+              document.getElementById("d").value = d;
+              document.getElementById("key").style.visibility = 'visible';
+              document.getElementById("encryption").style.visibility = 'visible';
+              document.getElementById("text").style.visibility = 'visible';
+          });
+    }
+
+    function encryption()
+    {
+        if(!check_validity(["message"]))
+        {
+            alert("Please correct the input with red boxes.")
+            return
+        }
+        postData(url + 'encrypt', { n:n, e:e, message: document.getElementById("message").value})
+          .then(data => {
+              cipher = data.cipher;
+              document.getElementById("encrypted").value = cipher;
+          });
+    }
+
+    function decryption()
+    {
+        if(!check_validity(["encrypted"]))
+        {
+            alert("Please correct the input with red boxes.")
+            return
+        }
+        postData(url + 'decrypt', {p:p, q:q, d:d, cipher: document.getElementById("encrypted").value})
+          .then(data => {
+              message = data.message;
+              document.getElementById("decrypted").value = message;
+          });
+    }
+
+    function sign_message() {
+        postData(url + 'sign',
+            {
+                p:p,
+                q:q,
+                d:d,
+                message: document.getElementById("message2").value,
+                method: document.getElementById("hash").value
+            }
+        ).then(data => {
+              signature = data.signature;
+              document.getElementById("signature").value = signature;
+          });
+    }
+
+    function verification(){
+        if(!check_validity(["signature"]))
+        {
+            alert("Please correct the input with red boxes.")
+            return
+        }
+        postData(url + 'verify',
+            {
+                n:n,
+                e:e,
+                message: document.getElementById("message2").value,
+                signature: document.getElementById("signature").value,
+                method: document.getElementById("hash").value
+            }
+        ).then(data => {
+              verified = data.verified;
+              let el = document.getElementById("verify_result");
+              if (verified)
+              {
+                  el.style.color = 'green';
+                  el.innerText = "message verified :)";
+              }else {
+                  el.style.color = 'red';
+                  el.innerText = "message verification failed :(";
+              }
+          });
+    }
+</script>
+
+<div>
+    <hr>
+    <div>
+        <div>
+            <label>RSA bit size</label>
+            <select name="length" id="length">
+                <option value="512">RSA 512 bits</option>
+                <option value="1024">RSA 1024 bits</option>
+                <option value="2048">RSA 2048 bits</option>
+            </select>
+            <button onclick="generate_key()">Generate</button>
+            <label id="time"></label>
+        </div>
+    </div>
+    <hr>
+    <div id="key" style="visibility: hidden">
+        <label for="p">p</label><br> <textarea readonly id="p" style="width: 100%"></textarea> <br>
+        <label for="q">q</label><br> <textarea readonly id="q" style="width: 100%"></textarea> <br>
+        <label for="n">n</label><br> <textarea readonly id="n" style="width: 100%"></textarea> <br>
+        <label for="e">e</label><br> <textarea readonly id="e" style="width: 100%"></textarea> <br>
+        <label for="d">d</label><br> <textarea readonly id="d" style="width: 100%"></textarea> <br>
+        <hr>
+    </div>
+
+    <div id="encryption" style="visibility: hidden">
+        <h2>Encryption / Decryption</h2>
+        <input id="message" type="text" pattern="[0-9a-fA-F]+" placeholder="Message(hex string)" style="width: 100%"/> <br>
+        <button onclick="encryption()">Encrypt↓</button> <br>
+        <input id="encrypted" type="text" pattern="[0-9a-fA-F]+" placeholder="Encrypted message(hex string)" style="width: 100%"/> <br>
+        <button onclick="decryption()">Decrypt↓</button> <br>
+        <textarea readonly id="decrypted" placeholder="Decrypted message(hex string)" style="width: 100%"></textarea> <br>
+        <hr>
+    </div>
+
+    <div id="text" style="visibility: hidden">
+        <h2>Signature / Verification</h2>
+        <label>Hash Function</label>
+        <select name="hash" id="hash">
+            <option value="MD5">MD5</option>
+            <option value="SHA224">SHA224</option>
+            <option value="SHA256">SHA256</option>
+        </select>
+        <br>
+        <input id="message2" type="text" placeholder="Message(for sign / verify)" style="width: 100%"/> <br>
+        <button onclick="sign_message()">Sign↓</button> <br>
+        <input id="signature" type="text" pattern="[0-9a-fA-F]+" placeholder="Message signature (hex string)" style="width: 100%"/> <br>
+        <button onclick="verification()">Verify→</button> <label id="verify_result"></label>
+        <hr>
+    </div>
+</div>
+</body>
+</html>
